@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from '../firebase';
-import { CheckSquare, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckSquare, AlertCircle, Loader2, Check, X } from 'lucide-react';
 
 interface LoginProps {
   isDark: boolean;
@@ -13,9 +13,29 @@ const Login: React.FC<LoginProps> = ({ isDark }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Password Requirements Logic
+  const passwordRequirements = useMemo(() => [
+    { id: 'length', label: 'Mínimo de 8 caracteres', test: (p: string) => p.length >= 8 },
+    { id: 'upper', label: 'Uma letra maiúscula', test: (p: string) => /[A-Z]/.test(p) },
+    { id: 'lower', label: 'Uma letra minúscula', test: (p: string) => /[a-z]/.test(p) },
+    { id: 'number', label: 'Um número', test: (p: string) => /[0-9]/.test(p) },
+    { id: 'special', label: 'Um caractere especial (@$!%*?&)', test: (p: string) => /[!@#$%^&*(),.?":{}|<>]/.test(p) },
+  ], []);
+
+  const isPasswordValid = useMemo(() => {
+    if (!isRegistering) return true; // Only validate strictly on registration
+    return passwordRequirements.every(req => req.test(password));
+  }, [password, isRegistering, passwordRequirements]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (isRegistering && !isPasswordValid) {
+        setError("A senha não atende aos requisitos de segurança.");
+        return;
+    }
+
     setLoading(true);
 
     try {
@@ -29,7 +49,8 @@ const Login: React.FC<LoginProps> = ({ isDark }) => {
       let msg = "Erro ao autenticar.";
       if (err.code === 'auth/invalid-credential') msg = "E-mail ou senha incorretos.";
       if (err.code === 'auth/email-already-in-use') msg = "Este e-mail já está cadastrado.";
-      if (err.code === 'auth/weak-password') msg = "A senha deve ter pelo menos 6 caracteres.";
+      if (err.code === 'auth/weak-password') msg = "A senha é muito fraca.";
+      if (err.code === 'auth/too-many-requests') msg = "Muitas tentativas falhas. Tente novamente mais tarde.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -54,7 +75,7 @@ const Login: React.FC<LoginProps> = ({ isDark }) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm flex items-center gap-2">
+            <div className="bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 p-3 rounded-lg text-sm flex items-center gap-2 animate-in slide-in-from-top-2">
               <AlertCircle size={16} />
               {error}
             </div>
@@ -77,7 +98,6 @@ const Login: React.FC<LoginProps> = ({ isDark }) => {
             <input
               type="password"
               required
-              minLength={6}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className={`w-full px-4 py-3 rounded-xl border focus:ring-2 focus:ring-blue-500 outline-none transition-all ${inputClass}`}
@@ -85,13 +105,36 @@ const Login: React.FC<LoginProps> = ({ isDark }) => {
             />
           </div>
 
+          {/* Password Strength Indicators - Only shown during Registration */}
+          {isRegistering && (
+             <div className={`p-4 rounded-xl text-xs space-y-2 border transition-all animate-in fade-in slide-in-from-top-2
+                ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-gray-50 border-gray-100'}
+             `}>
+                <p className="font-semibold mb-2 opacity-80">Sua senha deve conter:</p>
+                {passwordRequirements.map((req) => {
+                    const met = req.test(password);
+                    return (
+                        <div key={req.id} className={`flex items-center gap-2 transition-colors ${met ? 'text-green-500' : 'text-gray-400'}`}>
+                            {met ? <Check size={14} strokeWidth={3} /> : <X size={14} />}
+                            <span className={met ? 'opacity-100 font-medium' : 'opacity-70'}>{req.label}</span>
+                        </div>
+                    );
+                })}
+             </div>
+          )}
+
           <button
             type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-blue-500/20 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={loading || (isRegistering && !isPasswordValid)}
+            className={`w-full font-semibold py-3.5 rounded-xl transition-all shadow-lg active:scale-[0.98] flex items-center justify-center gap-2
+               ${loading || (isRegistering && !isPasswordValid)
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500 shadow-none' 
+                  : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20'
+               }
+            `}
           >
             {loading && <Loader2 size={20} className="animate-spin" />}
-            {isRegistering ? 'Criar Conta' : 'Entrar no Sistema'}
+            {isRegistering ? 'Criar Conta Segura' : 'Entrar no Sistema'}
           </button>
         </form>
 
@@ -99,7 +142,10 @@ const Login: React.FC<LoginProps> = ({ isDark }) => {
           <p className="text-sm opacity-70">
             {isRegistering ? 'Já tem uma conta?' : 'Não tem uma conta?'}
             <button
-              onClick={() => setIsRegistering(!isRegistering)}
+              onClick={() => {
+                  setIsRegistering(!isRegistering);
+                  setError(null);
+              }}
               className="ml-1.5 text-blue-500 hover:text-blue-600 font-semibold underline underline-offset-2"
             >
               {isRegistering ? 'Fazer Login' : 'Cadastre-se'}
