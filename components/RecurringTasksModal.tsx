@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Task } from '../types';
-import { isSameDay, getDayLabel, formatDateFull } from '../utils';
-import { X, Repeat, Check, Calendar, Clock, Pencil, List } from 'lucide-react';
+import { isSameDay, getDayLabel, formatDateFull, isTaskSuspended } from '../utils';
+import { X, Repeat, Check, Calendar, Clock, Pencil, List, PauseCircle } from 'lucide-react';
 
 interface RecurringTasksModalProps {
   isOpen: boolean;
@@ -21,8 +21,13 @@ const RecurringTasksModal: React.FC<RecurringTasksModalProps> = ({ isOpen, onClo
   const dayIndex = today.getDay();
 
   // Filter tasks that are recurring AND enabled for today (or have been completed today)
+  // EXCLUDE if effectively suspended
   const todaysRecurringTasks = tasks.filter(t => {
      if (!t.isRecurring || !t.recurringDays) return false;
+     
+     // Check suspension
+     if (isTaskSuspended(t)) return false;
+
      // Show if it's scheduled for today
      if (t.recurringDays.includes(dayIndex)) return true;
      return false;
@@ -116,7 +121,7 @@ const RecurringTasksModal: React.FC<RecurringTasksModalProps> = ({ isOpen, onClo
                 {todaysRecurringTasks.length === 0 ? (
                     <div className="text-center py-10 opacity-50">
                     <div className="mb-2 flex justify-center"><Repeat size={40} className="text-gray-300 dark:text-gray-600" /></div>
-                    <p className="text-sm font-medium">Nenhuma tarefa recorrente para hoje.</p>
+                    <p className="text-sm font-medium">Nenhuma tarefa recorrente ativa para hoje.</p>
                     <p className="text-xs">Aproveite o dia livre!</p>
                     </div>
                 ) : (
@@ -183,13 +188,26 @@ const RecurringTasksModal: React.FC<RecurringTasksModalProps> = ({ isOpen, onClo
                         <p className="text-sm">Nenhuma rotina cadastrada.</p>
                     </div>
                 ) : (
-                    allRecurringTasks.map(task => (
+                    allRecurringTasks.map(task => {
+                        const suspended = isTaskSuspended(task);
+                        return (
                         <div 
                             key={task.id}
-                            className={`flex items-center justify-between p-4 rounded-xl border ${itemClasses} hover:border-indigo-300 dark:hover:border-slate-600 transition-colors`}
+                            className={`flex items-center justify-between p-4 rounded-xl border transition-colors
+                                ${itemClasses} 
+                                ${suspended ? (isDark ? 'bg-amber-900/10 border-amber-900/30' : 'bg-amber-50 border-amber-100') : 'hover:border-indigo-300 dark:hover:border-slate-600'}
+                            `}
                         >
-                            <div>
-                                <h4 className="font-medium text-sm sm:text-base">{task.title}</h4>
+                            <div className={suspended ? 'opacity-75' : ''}>
+                                <div className="flex items-center gap-2">
+                                    <h4 className="font-medium text-sm sm:text-base">{task.title}</h4>
+                                    {suspended && (
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-1 ${isDark ? 'bg-amber-900/50 text-amber-500' : 'bg-amber-100 text-amber-700'}`}>
+                                            <PauseCircle size={10} />
+                                            {task.suspendedUntil ? `Volta ${new Date(task.suspendedUntil).toLocaleDateString()}` : 'Suspensa'}
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-3 mt-2">
                                     <div className="flex gap-1">
                                         {task.recurringDays?.sort().map(d => (
@@ -215,7 +233,7 @@ const RecurringTasksModal: React.FC<RecurringTasksModalProps> = ({ isOpen, onClo
                                 <Pencil size={16} />
                             </button>
                         </div>
-                    ))
+                    )})
                 )}
              </div>
         )}

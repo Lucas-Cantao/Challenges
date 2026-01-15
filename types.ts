@@ -32,6 +32,10 @@ export interface Task {
   recurringDays?: number[]; // 0 = Sunday, 1 = Monday, etc.
   recurringTime?: string; // "HH:MM" for daily deadline
   lastRecurringCompletion?: Date | null; // Stores the date of the last "daily" completion
+
+  // Suspension Logic
+  isSuspended?: boolean;
+  suspendedUntil?: Date | null; // If null/undefined and isSuspended=true, it is indefinitely suspended.
 }
 
 export interface DayGroup {

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Task, TaskStatus } from '../types';
-import { formatTime, isSameDay, calculateCurrentTaskTime, toInputDate } from '../utils';
+import { formatTime, isSameDay, calculateCurrentTaskTime, toInputDate, isTaskSuspended } from '../utils';
 import { 
   CheckCircle2, 
   Clock, 
@@ -77,8 +77,6 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
 
     // Determine if the filter view includes "Right Now" (e.g. Today, This Week).
     // This dictates whether we should show "Overdue" tasks.
-    // If I look at "Today", I want to see everything on my plate (Today + Overdue).
-    // If I look at "Last Month", I strictly only want things from last month.
     const isCurrentView = (!start || start <= now) && (!end || end >= now);
     
     // If no filter is set, return all tasks
@@ -87,6 +85,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
     return tasks.filter(t => {
        // --- RECURRING LOGIC ---
        if (t.isRecurring && t.recurringDays) {
+           // Skip if suspended right now and we are looking at current view
+           if (isCurrentView && isTaskSuspended(t)) return false;
+
            // 1. Was it completed IN this range?
            if (t.lastRecurringCompletion) {
                const recurDate = new Date(t.lastRecurringCompletion);
@@ -106,7 +107,9 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
                let current = new Date(start);
                while (current <= end) {
                    if (t.recurringDays.includes(current.getDay())) {
-                       return true; // Yes, it is scheduled for at least one day in this period
+                       // Even if scheduled, verify if it was suspended ON THAT DAY? 
+                       // Complex to check historic suspension, assume current state for simplicity or ignore historic check for now
+                       return true; 
                    }
                    current.setDate(current.getDate() + 1);
                }
@@ -181,7 +184,8 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
     // Helper: Is this recurring task LATE right now?
     const isRecurringLate = (t: Task) => {
         if (!t.isRecurring || !t.recurringDays || !t.recurringTime) return false;
-        
+        if (isTaskSuspended(t)) return false; // Suspended tasks are never late
+
         // Only check "Late" if today is part of the view
         const isTodayInView = (!start || start <= today) && (!end || end >= today);
         if (!isTodayInView) return false;
@@ -227,6 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
     const pending = taskList.filter(t => {
       if (t.status === TaskStatus.COMPLETED || t.status === TaskStatus.CANCELLED) return false;
       if (isRecurringDoneInPeriod(t)) return false;
+      if (t.isRecurring && isTaskSuspended(t)) return false; // Suspended aren't pending
       return true; 
     }).length;
 
@@ -234,7 +239,8 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
       t.isPriority && 
       t.status !== TaskStatus.COMPLETED && 
       t.status !== TaskStatus.CANCELLED &&
-      !isRecurringDoneInPeriod(t)
+      !isRecurringDoneInPeriod(t) &&
+      !isTaskSuspended(t)
     ).length;
     
     // Time metrics
@@ -250,6 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ tasks, isDark, startDate, endDate
              const isLate = isRecurringLate(t);
              
              if (isDone || isLate) return false;
+             if (isTaskSuspended(t)) return false;
 
              // Only count recurring as "Todo" if scheduled for TODAY
              const isTodayInView = (!start || start <= today) && (!end || end >= today);

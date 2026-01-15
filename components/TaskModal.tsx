@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, Comment } from '../types';
 import { formatDateFull, formatTime, getStatusColor, toInputDate, toInputTime, calculateCurrentTaskTime, getDayLabel } from '../utils';
-import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat } from 'lucide-react';
+import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat, PauseCircle, Power } from 'lucide-react';
 
 interface TaskModalProps {
   task: Task | null;
@@ -28,6 +28,11 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
   const [editIsRecurring, setEditIsRecurring] = useState(false);
   const [editRecurringDays, setEditRecurringDays] = useState<number[]>([]);
   const [editRecurringTime, setEditRecurringTime] = useState('');
+
+  // Suspension State
+  const [editIsSuspended, setEditIsSuspended] = useState(false);
+  const [editSuspensionType, setEditSuspensionType] = useState<'indefinite' | 'until'>('indefinite');
+  const [editSuspendedUntil, setEditSuspendedUntil] = useState('');
 
   // Timer Synchronization
   useEffect(() => {
@@ -63,9 +68,19 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
         setEditTitle(task.title);
         setEditDescription(task.description || '');
         setEditRequester(task.requester || '');
+        
         setEditIsRecurring(!!task.isRecurring);
         setEditRecurringDays(task.recurringDays || []);
         setEditRecurringTime(task.recurringTime || '');
+
+        setEditIsSuspended(!!task.isSuspended);
+        if (task.suspendedUntil) {
+            setEditSuspensionType('until');
+            setEditSuspendedUntil(toInputDate(task.suspendedUntil));
+        } else {
+            setEditSuspensionType('indefinite');
+            setEditSuspendedUntil('');
+        }
     }
   }, [task]); 
   
@@ -74,9 +89,20 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
         setEditTitle(task.title);
         setEditDescription(task.description || '');
         setEditRequester(task.requester || '');
+        
         setEditIsRecurring(!!task.isRecurring);
         setEditRecurringDays(task.recurringDays || []);
         setEditRecurringTime(task.recurringTime || '');
+
+        setEditIsSuspended(!!task.isSuspended);
+        if (task.suspendedUntil) {
+            setEditSuspensionType('until');
+            setEditSuspendedUntil(toInputDate(task.suspendedUntil));
+        } else {
+            setEditSuspensionType('indefinite');
+            setEditSuspendedUntil('');
+        }
+
         setIsEditing(true);
      }
   };
@@ -87,6 +113,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
 
   const saveEditing = () => {
       if (!task) return;
+
+      // Logic to resolve suspension date
+      let finalSuspendedUntil: Date | null = null;
+      if (editIsSuspended && editSuspensionType === 'until' && editSuspendedUntil) {
+         const [y, m, d] = editSuspendedUntil.split('-').map(Number);
+         finalSuspendedUntil = new Date(y, m - 1, d);
+      }
+
       onUpdate({
           ...task,
           title: editTitle,
@@ -94,7 +128,10 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
           requester: editRequester,
           isRecurring: editIsRecurring,
           recurringDays: editIsRecurring ? editRecurringDays : [],
-          recurringTime: editIsRecurring ? editRecurringTime : ''
+          recurringTime: editIsRecurring ? editRecurringTime : '',
+          
+          isSuspended: editIsRecurring ? editIsSuspended : false,
+          suspendedUntil: (editIsRecurring && editIsSuspended) ? finalSuspendedUntil : null
       });
       setIsEditing(false);
   };
@@ -311,9 +348,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                     />
                 </div>
             ) : (
-                <h2 className={`text-2xl font-bold leading-tight ${task.status === TaskStatus.COMPLETED ? 'line-through text-gray-400' : ''}`}>
-                    {task.title}
-                </h2>
+                <div className="flex items-center gap-3">
+                    <h2 className={`text-2xl font-bold leading-tight ${task.status === TaskStatus.COMPLETED ? 'line-through text-gray-400' : ''}`}>
+                        {task.title}
+                    </h2>
+                    {task.isSuspended && (
+                        <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg ${isDark ? 'bg-amber-900/40 text-amber-300' : 'bg-amber-100 text-amber-700'}`}>
+                            <PauseCircle size={14} />
+                            <span>Suspensa {task.suspendedUntil ? `até ${new Date(task.suspendedUntil).toLocaleDateString()}` : 'Indefinidamente'}</span>
+                        </div>
+                    )}
+                </div>
             )}
           </div>
 
@@ -392,51 +437,109 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                  </div>
 
                  {(!isEditing && task.isRecurring) && (
-                     <div className="flex flex-wrap gap-2 items-center">
-                        <div className="flex gap-1">
-                            {task.recurringDays?.sort().map(d => (
-                                <span key={d} className={`text-xs w-5 h-5 flex items-center justify-center rounded bg-indigo-200 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold`}>
-                                    {getDayLabel(d)}
-                                </span>
-                            ))}
-                        </div>
-                        {task.recurringTime && (
-                            <div className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded ml-2">
-                                <Clock size={12} /> {task.recurringTime}
+                     <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap gap-2 items-center">
+                            <div className="flex gap-1">
+                                {task.recurringDays?.sort().map(d => (
+                                    <span key={d} className={`text-xs w-5 h-5 flex items-center justify-center rounded bg-indigo-200 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold`}>
+                                        {getDayLabel(d)}
+                                    </span>
+                                ))}
                             </div>
-                        )}
+                            {task.recurringTime && (
+                                <div className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded ml-2">
+                                    <Clock size={12} /> {task.recurringTime}
+                                </div>
+                            )}
+                        </div>
                      </div>
                  )}
 
                  {(isEditing && editIsRecurring) && (
-                     <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-                        <div>
-                            <p className="text-xs text-gray-500 mb-2">Dias da semana:</p>
-                            <div className="flex gap-1">
-                                {[0,1,2,3,4,5,6].map((day) => (
-                                <button
-                                    key={day}
-                                    type="button"
-                                    onClick={() => toggleRecurringDay(day)}
-                                    className={`w-7 h-7 rounded-full text-xs font-bold transition-all
-                                    ${editRecurringDays.includes(day) 
-                                        ? 'bg-indigo-500 text-white shadow-md' 
-                                        : 'bg-white text-gray-500 border border-gray-200 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-400'}
-                                    `}
-                                >
-                                    {getDayLabel(day)}
-                                </button>
-                                ))}
+                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                        {/* Days & Time */}
+                        <div className="space-y-3">
+                            <div>
+                                <p className="text-xs text-gray-500 mb-2">Dias da semana:</p>
+                                <div className="flex gap-1">
+                                    {[0,1,2,3,4,5,6].map((day) => (
+                                    <button
+                                        key={day}
+                                        type="button"
+                                        onClick={() => toggleRecurringDay(day)}
+                                        className={`w-7 h-7 rounded-full text-xs font-bold transition-all
+                                        ${editRecurringDays.includes(day) 
+                                            ? 'bg-indigo-500 text-white shadow-md' 
+                                            : 'bg-white text-gray-500 border border-gray-200 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-400'}
+                                        `}
+                                    >
+                                        {getDayLabel(day)}
+                                    </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Clock size={14} className="text-gray-400" />
+                                <input
+                                    type="time"
+                                    value={editRecurringTime}
+                                    onChange={(e) => setEditRecurringTime(e.target.value)}
+                                    className={`text-sm p-1 rounded border focus:ring-2 focus:ring-indigo-500 outline-none ${inputClasses} [color-scheme:${isDark ? 'dark' : 'light'}]`}
+                                />
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Clock size={14} className="text-gray-400" />
-                            <input
-                                type="time"
-                                value={editRecurringTime}
-                                onChange={(e) => setEditRecurringTime(e.target.value)}
-                                className={`text-sm p-1 rounded border focus:ring-2 focus:ring-indigo-500 outline-none ${inputClasses} [color-scheme:${isDark ? 'dark' : 'light'}]`}
-                            />
+
+                        {/* Suspension Controls */}
+                        <div className={`border-t pt-3 ${isDark ? 'border-slate-700' : 'border-indigo-100'}`}>
+                           <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300">
+                                    <PauseCircle size={16} />
+                                    <span>Suspender Recorrência</span>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={editIsSuspended} onChange={(e) => setEditIsSuspended(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-amber-500"></div>
+                                </label>
+                           </div>
+
+                           {editIsSuspended && (
+                               <div className="bg-amber-50 dark:bg-amber-900/10 p-3 rounded-lg space-y-2 animate-in slide-in-from-top-1">
+                                  <div className="flex items-center gap-4 text-sm">
+                                     <label className="flex items-center gap-2 cursor-pointer">
+                                        <input 
+                                          type="radio" 
+                                          name="suspension" 
+                                          checked={editSuspensionType === 'indefinite'} 
+                                          onChange={() => setEditSuspensionType('indefinite')}
+                                          className="text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Indeterminado</span>
+                                     </label>
+                                     <label className="flex items-center gap-2 cursor-pointer">
+                                        <input 
+                                          type="radio" 
+                                          name="suspension" 
+                                          checked={editSuspensionType === 'until'} 
+                                          onChange={() => setEditSuspensionType('until')}
+                                          className="text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className={isDark ? 'text-gray-300' : 'text-gray-700'}>Até uma data</span>
+                                     </label>
+                                  </div>
+                                  
+                                  {editSuspensionType === 'until' && (
+                                      <div className="flex items-center gap-2 mt-2">
+                                          <span className="text-xs text-gray-500">Voltar em:</span>
+                                          <input 
+                                            type="date"
+                                            value={editSuspendedUntil}
+                                            onChange={(e) => setEditSuspendedUntil(e.target.value)}
+                                            className={`text-sm p-1 rounded border focus:ring-2 focus:ring-amber-500 outline-none ${inputClasses} [color-scheme:${isDark ? 'dark' : 'light'}]`}
+                                          />
+                                      </div>
+                                  )}
+                               </div>
+                           )}
                         </div>
                      </div>
                  )}

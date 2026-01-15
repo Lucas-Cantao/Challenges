@@ -148,3 +148,20 @@ export const getWeekBounds = (date: Date) => {
 
   return { start, end };
 };
+
+// Check if a recurring task is effectively suspended for TODAY
+export const isTaskSuspended = (task: Task): boolean => {
+  if (!task.isRecurring || !task.isSuspended) return false;
+  
+  // If indefinite suspension (no date set), it is suspended.
+  if (!task.suspendedUntil) return true;
+  
+  const now = new Date();
+  // Suspended Until means "Suspended inclusive of this date". 
+  // So if today is 10th and suspendedUntil is 10th, it is still suspended.
+  // It resumes on the 11th.
+  const suspensionEnd = new Date(task.suspendedUntil);
+  suspensionEnd.setHours(23, 59, 59, 999); 
+  
+  return now <= suspensionEnd;
+};

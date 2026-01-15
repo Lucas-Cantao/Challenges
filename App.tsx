@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Moon, Sun, Plus, LayoutDashboard, CheckSquare, GripVertical, ChevronDown, ChevronRight, Filter, Calendar as CalendarIcon, CalendarOff, Repeat, List, WifiOff, AlertTriangle, LogOut } from 'lucide-react';
 import { Task, TaskStatus, DayGroup, WeekGroup, Theme, Comment } from './types';
-import { formatDateFull, getWeekBounds, toInputDate } from './utils';
+import { formatDateFull, getWeekBounds, toInputDate, isTaskSuspended } from './utils';
 import TaskCard from './components/TaskCard';
 import TaskModal from './components/TaskModal';
 import CreateTaskModal from './components/CreateTaskModal';
@@ -99,7 +99,9 @@ const App: React.FC = () => {
             elapsedTimeSeconds: value.elapsedTimeSeconds || 0,
             isPriority: !!value.isPriority,
             status: value.status || TaskStatus.TODO,
-            title: value.title || 'Sem título'
+            title: value.title || 'Sem título',
+            isSuspended: !!value.isSuspended,
+            suspendedUntil: value.suspendedUntil ? new Date(value.suspendedUntil) : null
           } as Task;
         });
         setTasks(loadedTasks);
@@ -160,7 +162,9 @@ const App: React.FC = () => {
           completedAt: null,
           isRecurring: !!newTaskData.isRecurring,
           recurringDays: newTaskData.recurringDays || [],
-          recurringTime: newTaskData.recurringTime || ""
+          recurringTime: newTaskData.recurringTime || "",
+          isSuspended: !!newTaskData.isSuspended,
+          suspendedUntil: newTaskData.suspendedUntil ? newTaskData.suspendedUntil.toISOString() : null
         };
 
         await set(newTaskRef, taskToSave);
@@ -208,7 +212,9 @@ const App: React.FC = () => {
             comments: updatedTask.comments.map(c => ({
                 ...c,
                 createdAt: c.createdAt.toISOString()
-            }))
+            })),
+            isSuspended: !!updatedTask.isSuspended,
+            suspendedUntil: updatedTask.suspendedUntil ? updatedTask.suspendedUntil.toISOString() : null
         };
 
         await update(taskRef, dataToUpdate);
@@ -290,6 +296,9 @@ const App: React.FC = () => {
     }
 
     const filteredList = nonPriorityTasks.filter(task => {
+        // Skip suspended tasks in main view
+        if (isTaskSuspended(task)) return false;
+
         if (!task.deadline) return false; 
         if (!fStart || !fEnd) return true;
         
@@ -374,12 +383,12 @@ const App: React.FC = () => {
 
   const priorityTasks = useMemo(() => {
     return tasks
-      .filter(t => t.isPriority)
+      .filter(t => t.isPriority && !isTaskSuspended(t)) // Filter suspended
       .sort((a, b) => (a.priorityOrder || 0) - (b.priorityOrder || 0));
   }, [tasks]);
 
   const noDeadlineTasks = useMemo(() => {
-    return tasks.filter(t => !t.deadline && !t.isPriority && !t.isRecurring);
+    return tasks.filter(t => !t.deadline && !t.isPriority && !t.isRecurring && !isTaskSuspended(t));
   }, [tasks]);
 
   const toggleWeekExpand = (key: string) => {
