@@ -736,6 +736,10 @@ const App: React.FC = () => {
          tasks={tasks}
          onUpdate={handleUpdateTask}
          isDark={isDark}
+         onEditTask={(task) => {
+             setIsRecurringModalOpen(false);
+             handleTaskClick(task);
+         }}
       />
 
     </div>

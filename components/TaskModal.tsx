@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, Comment } from '../types';
-import { formatDateFull, formatTime, getStatusColor, toInputDate, toInputTime, calculateCurrentTaskTime } from '../utils';
-import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon } from 'lucide-react';
+import { formatDateFull, formatTime, getStatusColor, toInputDate, toInputTime, calculateCurrentTaskTime, getDayLabel } from '../utils';
+import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat } from 'lucide-react';
 
 interface TaskModalProps {
   task: Task | null;
@@ -17,6 +17,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
   
   // State for inline confirmation
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
+
+  // Edit Mode State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editRequester, setEditRequester] = useState('');
+  
+  // Recurring Edit State
+  const [editIsRecurring, setEditIsRecurring] = useState(false);
+  const [editRecurringDays, setEditRecurringDays] = useState<number[]>([]);
+  const [editRecurringTime, setEditRecurringTime] = useState('');
 
   // Timer Synchronization
   useEffect(() => {
@@ -42,8 +53,51 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
      if (!isOpen) {
         setPendingStatus(null);
         setNewComment('');
+        setIsEditing(false);
      }
   }, [isOpen, task?.id]);
+
+  // Sync edit state with task data
+  useEffect(() => {
+    if (task) {
+        setEditTitle(task.title);
+        setEditDescription(task.description || '');
+        setEditRequester(task.requester || '');
+        setEditIsRecurring(!!task.isRecurring);
+        setEditRecurringDays(task.recurringDays || []);
+        setEditRecurringTime(task.recurringTime || '');
+    }
+  }, [task]); 
+  
+  const startEditing = () => {
+     if (task) {
+        setEditTitle(task.title);
+        setEditDescription(task.description || '');
+        setEditRequester(task.requester || '');
+        setEditIsRecurring(!!task.isRecurring);
+        setEditRecurringDays(task.recurringDays || []);
+        setEditRecurringTime(task.recurringTime || '');
+        setIsEditing(true);
+     }
+  };
+
+  const cancelEditing = () => {
+      setIsEditing(false);
+  };
+
+  const saveEditing = () => {
+      if (!task) return;
+      onUpdate({
+          ...task,
+          title: editTitle,
+          description: editDescription,
+          requester: editRequester,
+          isRecurring: editIsRecurring,
+          recurringDays: editIsRecurring ? editRecurringDays : [],
+          recurringTime: editIsRecurring ? editRecurringTime : ''
+      });
+      setIsEditing(false);
+  };
 
   const toggleTimer = () => {
     if (!task) return;
@@ -67,6 +121,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
 
   const handleClose = () => {
     setPendingStatus(null);
+    setIsEditing(false);
     onClose();
   };
 
@@ -78,9 +133,6 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
     if (newStatus === TaskStatus.COMPLETED || newStatus === TaskStatus.CANCELLED) {
         setPendingStatus(newStatus);
     } else {
-        // Moving back to TODO (if allowed in logic) doesn't strictly need confirmation, 
-        // but current logic blocks edits once locked anyway. 
-        // If we were to allow unlocking, we'd do it here immediately.
         executeStatusUpdate(newStatus);
     }
   };
@@ -151,6 +203,14 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
     }
   };
 
+  const toggleRecurringDay = (dayIndex: number) => {
+    if (editRecurringDays.includes(dayIndex)) {
+      setEditRecurringDays(editRecurringDays.filter(d => d !== dayIndex));
+    } else {
+      setEditRecurringDays([...editRecurringDays, dayIndex]);
+    }
+  };
+
   const handleAddComment = () => {
     if (!task || !newComment.trim()) return;
     const comment: Comment = {
@@ -181,15 +241,17 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
         {/* Header */}
         <div className={`px-6 py-4 border-b flex justify-between items-center ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
           <div className="flex items-center gap-3">
-             <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusColor(task.status, isDark, task.deadline)}`}>
-               {task.status}
-             </div>
+             {!isEditing && (
+                 <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusColor(task.status, isDark, task.deadline)}`}>
+                    {task.status}
+                 </div>
+             )}
              
              <button 
                onClick={togglePriority}
-               disabled={isLocked || !!pendingStatus}
+               disabled={isLocked || !!pendingStatus || isEditing}
                className={`flex items-center gap-1 text-xs font-bold border px-2 py-0.5 rounded-full transition-colors
-                 ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed' : ''}
+                 ${(isLocked || !!pendingStatus || isEditing) ? 'opacity-50 cursor-not-allowed' : ''}
                  ${task.isPriority 
                    ? 'text-amber-500 border-amber-500 bg-amber-50 dark:bg-amber-900/20' 
                    : 'text-gray-400 border-gray-300 dark:border-slate-600 hover:border-amber-400 hover:text-amber-500'
@@ -199,23 +261,65 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                 {task.isPriority ? 'Prioridade' : 'Marcar Prioridade'}
              </button>
           </div>
-          <button onClick={handleClose} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full transition-colors">
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+             {!isEditing ? (
+                 <button 
+                    onClick={startEditing}
+                    disabled={isLocked}
+                    className={`p-2 rounded-full transition-colors ${isLocked ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400'}`}
+                    title="Editar Tarefa"
+                 >
+                    <Pencil size={18} />
+                 </button>
+             ) : (
+                 <div className="flex items-center gap-2 mr-2">
+                     <button 
+                        onClick={cancelEditing}
+                        className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                        title="Cancelar Edição"
+                     >
+                        <XIcon size={18} />
+                     </button>
+                     <button 
+                        onClick={saveEditing}
+                        className="p-2 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-600 dark:text-green-400 transition-colors"
+                        title="Salvar Alterações"
+                     >
+                        <Save size={18} />
+                     </button>
+                 </div>
+             )}
+             <button onClick={handleClose} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full transition-colors">
+                <X size={20} />
+             </button>
+          </div>
         </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 relative">
           
-          {/* Title */}
+          {/* Title Section */}
           <div>
-            <h2 className={`text-2xl font-bold leading-tight ${task.status === TaskStatus.COMPLETED ? 'line-through text-gray-400' : ''}`}>
-                {task.title}
-            </h2>
+            {isEditing ? (
+                <div className="space-y-1">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-gray-500">Título</label>
+                    <input 
+                        type="text" 
+                        value={editTitle} 
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className={`w-full text-xl font-bold p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none ${inputClasses}`}
+                    />
+                </div>
+            ) : (
+                <h2 className={`text-2xl font-bold leading-tight ${task.status === TaskStatus.COMPLETED ? 'line-through text-gray-400' : ''}`}>
+                    {task.title}
+                </h2>
+            )}
           </div>
 
           {/* Meta Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             {/* Deadline */}
              <div className="flex items-start gap-3">
                <Calendar className="text-blue-500 mt-0.5" size={20} />
                <div className="flex-1">
@@ -223,7 +327,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                  <div className="flex items-center gap-2">
                    <input
                       type="date"
-                      disabled={isLocked || !!pendingStatus}
+                      disabled={isLocked || !!pendingStatus || isEditing} 
                       value={task.deadline ? toInputDate(task.deadline) : ''}
                       onChange={handleDateChange}
                       className={`text-sm font-semibold bg-transparent outline-none py-1 w-32
@@ -250,14 +354,94 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                  )}
                </div>
              </div>
+             
+             {/* Requester */}
              <div className="flex items-start gap-3">
                <User className="text-purple-500 mt-0.5" size={20} />
-               <div>
+               <div className="flex-1">
                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Solicitante</p>
-                 <p className="text-sm">{task.requester || 'Não informado'}</p>
+                 {isEditing ? (
+                     <input 
+                        type="text" 
+                        value={editRequester}
+                        onChange={(e) => setEditRequester(e.target.value)}
+                        className={`w-full mt-1 p-1.5 text-sm rounded border focus:ring-2 focus:ring-blue-500 outline-none ${inputClasses}`}
+                        placeholder="Nome do solicitante"
+                     />
+                 ) : (
+                    <p className="text-sm">{task.requester || 'Não informado'}</p>
+                 )}
                </div>
              </div>
           </div>
+          
+          {/* Recurring Settings (Visible if Recurring OR Editing) */}
+          {(task.isRecurring || isEditing) && (
+              <div className={`p-4 rounded-xl border transition-all ${isDark ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-indigo-50 border-indigo-100'}`}>
+                 <div className="flex items-center justify-between mb-3">
+                     <div className="flex items-center gap-2">
+                        <Repeat size={16} className="text-indigo-500" />
+                        <span className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Configuração de Recorrência</span>
+                     </div>
+                     {isEditing && (
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" checked={editIsRecurring} onChange={(e) => setEditIsRecurring(e.target.checked)} className="sr-only peer" />
+                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-500"></div>
+                        </label>
+                     )}
+                 </div>
+
+                 {(!isEditing && task.isRecurring) && (
+                     <div className="flex flex-wrap gap-2 items-center">
+                        <div className="flex gap-1">
+                            {task.recurringDays?.sort().map(d => (
+                                <span key={d} className={`text-xs w-5 h-5 flex items-center justify-center rounded bg-indigo-200 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200 font-bold`}>
+                                    {getDayLabel(d)}
+                                </span>
+                            ))}
+                        </div>
+                        {task.recurringTime && (
+                            <div className="flex items-center gap-1 text-xs text-indigo-600 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 px-2 py-0.5 rounded ml-2">
+                                <Clock size={12} /> {task.recurringTime}
+                            </div>
+                        )}
+                     </div>
+                 )}
+
+                 {(isEditing && editIsRecurring) && (
+                     <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                        <div>
+                            <p className="text-xs text-gray-500 mb-2">Dias da semana:</p>
+                            <div className="flex gap-1">
+                                {[0,1,2,3,4,5,6].map((day) => (
+                                <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => toggleRecurringDay(day)}
+                                    className={`w-7 h-7 rounded-full text-xs font-bold transition-all
+                                    ${editRecurringDays.includes(day) 
+                                        ? 'bg-indigo-500 text-white shadow-md' 
+                                        : 'bg-white text-gray-500 border border-gray-200 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-400'}
+                                    `}
+                                >
+                                    {getDayLabel(day)}
+                                </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Clock size={14} className="text-gray-400" />
+                            <input
+                                type="time"
+                                value={editRecurringTime}
+                                onChange={(e) => setEditRecurringTime(e.target.value)}
+                                className={`text-sm p-1 rounded border focus:ring-2 focus:ring-indigo-500 outline-none ${inputClasses} [color-scheme:${isDark ? 'dark' : 'light'}]`}
+                            />
+                        </div>
+                     </div>
+                 )}
+              </div>
+          )}
 
           {/* Description */}
           <div className={`p-4 rounded-xl ${isDark ? 'bg-slate-800' : 'bg-gray-50'}`}>
@@ -265,72 +449,86 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                <AlignLeft size={18} />
                <span className="text-sm font-medium">Observações</span>
              </div>
-             <p className="text-sm leading-relaxed whitespace-pre-wrap">
-               {task.description || 'Nenhuma observação adicionada.'}
-             </p>
+             {isEditing ? (
+                 <textarea 
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    rows={4}
+                    className={`w-full p-2 rounded-lg border focus:ring-2 focus:ring-blue-500 outline-none resize-none ${inputClasses}`}
+                    placeholder="Adicione detalhes..."
+                 />
+             ) : (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {task.description || 'Nenhuma observação adicionada.'}
+                </p>
+             )}
           </div>
 
-          {/* Timer Section */}
-          <div className={`p-6 rounded-xl flex flex-col items-center justify-center gap-4 border transition-all
-             ${isRunning 
-                ? (isDark ? 'bg-red-900/10 border-red-900/50' : 'bg-red-50 border-red-100') 
-                : (isDark ? 'bg-navy-800 border-slate-700' : 'bg-blue-50 border-blue-100')
-             }
-          `}>
-             <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-                <Clock size={20} className={isRunning ? 'text-red-500 animate-pulse' : ''} />
-                <span className="text-sm font-medium">{isRunning ? 'Cronômetro Rodando' : 'Tempo de Execução'}</span>
-             </div>
-             <div className={`text-5xl font-mono font-bold tracking-widest ${isRunning ? 'text-red-500' : 'text-blue-600 dark:text-blue-400'}`}>
-                {formatTime(displayTime)}
-             </div>
-             <button
-               onClick={toggleTimer}
-               disabled={isLocked || !!pendingStatus}
-               className={`flex items-center gap-2 px-6 py-2 rounded-full font-medium transition-all duration-300 shadow-md active:scale-95
-                 ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-slate-700 dark:text-gray-400' : 
-                   isRunning 
-                     ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/20' 
-                     : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/20'
-                 }`}
-             >
-               {isRunning ? <><Pause size={18} fill="currentColor" /> Pausar</> : <><Play size={18} fill="currentColor" /> Iniciar</>}
-             </button>
-          </div>
+          {/* Timer Section - Hide in edit mode */}
+          {!isEditing && (
+            <div className={`p-6 rounded-xl flex flex-col items-center justify-center gap-4 border transition-all
+                ${isRunning 
+                    ? (isDark ? 'bg-red-900/10 border-red-900/50' : 'bg-red-50 border-red-100') 
+                    : (isDark ? 'bg-navy-800 border-slate-700' : 'bg-blue-50 border-blue-100')
+                }
+            `}>
+                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                    <Clock size={20} className={isRunning ? 'text-red-500 animate-pulse' : ''} />
+                    <span className="text-sm font-medium">{isRunning ? 'Cronômetro Rodando' : 'Tempo de Execução'}</span>
+                </div>
+                <div className={`text-5xl font-mono font-bold tracking-widest ${isRunning ? 'text-red-500' : 'text-blue-600 dark:text-blue-400'}`}>
+                    {formatTime(displayTime)}
+                </div>
+                <button
+                onClick={toggleTimer}
+                disabled={isLocked || !!pendingStatus}
+                className={`flex items-center gap-2 px-6 py-2 rounded-full font-medium transition-all duration-300 shadow-md active:scale-95
+                    ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-500 dark:bg-slate-700 dark:text-gray-400' : 
+                    isRunning 
+                        ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/20' 
+                        : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/20'
+                    }`}
+                >
+                {isRunning ? <><Pause size={18} fill="currentColor" /> Pausar</> : <><Play size={18} fill="currentColor" /> Iniciar</>}
+                </button>
+            </div>
+          )}
 
           {/* Comments Section */}
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Comentários</h3>
-            <div className="space-y-3 mb-4">
-              {task.comments.length === 0 && (
-                <p className="text-sm text-gray-400 italic">Sem comentários ainda.</p>
-              )}
-              {task.comments.map((comment) => (
-                <div key={comment.id} className={`p-3 rounded-lg text-sm ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                  <p>{comment.text}</p>
-                  <p className="text-xs text-gray-500 mt-1 text-right">{new Date(comment.createdAt).toLocaleString('pt-BR')}</p>
+          {!isEditing && (
+            <div>
+                <h3 className="text-lg font-semibold mb-3">Comentários</h3>
+                <div className="space-y-3 mb-4">
+                {task.comments.length === 0 && (
+                    <p className="text-sm text-gray-400 italic">Sem comentários ainda.</p>
+                )}
+                {task.comments.map((comment) => (
+                    <div key={comment.id} className={`p-3 rounded-lg text-sm ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
+                    <p>{comment.text}</p>
+                    <p className="text-xs text-gray-500 mt-1 text-right">{new Date(comment.createdAt).toLocaleString('pt-BR')}</p>
+                    </div>
+                ))}
                 </div>
-              ))}
+                <div className="flex gap-2">
+                <input
+                    type="text"
+                    disabled={isLocked || !!pendingStatus}
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder={(isLocked || !!pendingStatus) ? "Tarefa bloqueada" : "Adicionar comentário..."}
+                    className={`flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputClasses} ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    onKeyDown={(e) => e.key === 'Enter' && (!isLocked && !pendingStatus) && handleAddComment()}
+                />
+                <button 
+                    onClick={handleAddComment}
+                    disabled={isLocked || !!pendingStatus}
+                    className={`p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                    <Send size={20} />
+                </button>
+                </div>
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                disabled={isLocked || !!pendingStatus}
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder={(isLocked || !!pendingStatus) ? "Tarefa bloqueada" : "Adicionar comentário..."}
-                className={`flex-1 px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${inputClasses} ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                onKeyDown={(e) => e.key === 'Enter' && (!isLocked && !pendingStatus) && handleAddComment()}
-              />
-              <button 
-                onClick={handleAddComment}
-                disabled={isLocked || !!pendingStatus}
-                className={`p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors ${(isLocked || !!pendingStatus) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <Send size={20} />
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Footer Actions - Dynamic Content based on confirmation state */}
@@ -367,6 +565,22 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                      <Check size={16} /> Confirmar
                    </button>
                 </div>
+             </div>
+           ) : isEditing ? (
+             // EDITING ACTIONS
+             <div className="flex justify-end gap-3">
+                 <button 
+                    onClick={cancelEditing}
+                    className="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                 >
+                    Cancelar Edição
+                 </button>
+                 <button 
+                    onClick={saveEditing}
+                    className="px-6 py-2 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 shadow-lg shadow-green-500/20 flex items-center gap-2"
+                 >
+                    <Save size={16} /> Salvar Alterações
+                 </button>
              </div>
            ) : (
              // DEFAULT BUTTONS
