@@ -14,7 +14,13 @@ import { ref, onValue, push, set, update, database, auth, onAuthStateChanged, si
 
 const App: React.FC = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [theme, setTheme] = useState<Theme>('light');
+  
+  // Initialize theme from localStorage or default to 'light'
+  const [theme, setTheme] = useState<Theme>(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return (savedTheme === 'dark' || savedTheme === 'light') ? savedTheme : 'light';
+  });
+
   const [viewMode, setViewMode] = useState<'list' | 'dashboard'>('list'); 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
@@ -135,6 +141,7 @@ const App: React.FC = () => {
     } else {
       root.classList.remove('dark');
     }
+    localStorage.setItem('theme', theme);
   }, [theme]);
 
   // --- CRUD Operations (Realtime Database) ---
