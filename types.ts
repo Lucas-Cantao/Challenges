@@ -9,6 +9,7 @@ export interface Comment {
   id: string;
   text: string;
   createdAt: Date;
+  isCompleted?: boolean; // Checkbox status
 }
 
 export interface Task {

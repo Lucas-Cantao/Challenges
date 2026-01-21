@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus, Comment } from '../types';
 import { formatDateFull, formatTime, getStatusColor, toInputDate, toInputTime, calculateCurrentTaskTime, getDayLabel } from '../utils';
-import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat, PauseCircle, Power } from 'lucide-react';
+import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat, PauseCircle, CheckSquare, Square } from 'lucide-react';
 
 interface TaskModalProps {
   task: Task | null;
@@ -17,6 +17,9 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
   
   // State for inline confirmation
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
+
+  // State for Comment Completion Confirmation (stores comment ID)
+  const [pendingCommentCompletion, setPendingCommentCompletion] = useState<string | null>(null);
 
   // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
@@ -57,6 +60,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
   useEffect(() => {
      if (!isOpen) {
         setPendingStatus(null);
+        setPendingCommentCompletion(null);
         setNewComment('');
         setIsEditing(false);
      }
@@ -158,6 +162,7 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
 
   const handleClose = () => {
     setPendingStatus(null);
+    setPendingCommentCompletion(null);
     setIsEditing(false);
     onClose();
   };
@@ -254,12 +259,47 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
       id: Date.now().toString(),
       text: newComment,
       createdAt: new Date(),
+      isCompleted: false
     };
     onUpdate({
       ...task,
       comments: [...task.comments, comment],
     });
     setNewComment('');
+  };
+
+  // --- Comment Checkbox Logic ---
+
+  const initiateCommentToggle = (commentId: string) => {
+    if (!task) return;
+    const comment = task.comments.find(c => c.id === commentId);
+    if (!comment) return;
+
+    if (comment.isCompleted) {
+        // Unchecking is usually safe to do without confirmation (or less risky), 
+        // but if we want consistency, we could confirm both. 
+        // For better UX, checking "Done" requires confirmation to prevent accidental closure.
+        // Unchecking "Done" is usually an intentional "Oops" fix, so we can make it instant.
+        updateCommentStatus(commentId, false);
+    } else {
+        // Requires confirmation to Mark as Done
+        setPendingCommentCompletion(commentId);
+    }
+  };
+
+  const confirmCommentCompletion = () => {
+      if (pendingCommentCompletion) {
+          updateCommentStatus(pendingCommentCompletion, true);
+          setPendingCommentCompletion(null);
+      }
+  };
+
+  const updateCommentStatus = (commentId: string, status: boolean) => {
+      if (!task) return;
+      const updatedComments = task.comments.map(c => 
+          c.id === commentId ? { ...c, isCompleted: status } : c
+      );
+      onUpdate({ ...task, comments: updatedComments });
   };
 
   if (!isOpen || !task) return null;
@@ -606,9 +646,57 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
                     <p className="text-sm text-gray-400 italic">Sem comentários ainda.</p>
                 )}
                 {task.comments.map((comment) => (
-                    <div key={comment.id} className={`p-3 rounded-lg text-sm ${isDark ? 'bg-slate-800' : 'bg-gray-100'}`}>
-                    <p>{comment.text}</p>
-                    <p className="text-xs text-gray-500 mt-1 text-right">{new Date(comment.createdAt).toLocaleString('pt-BR')}</p>
+                    <div 
+                        key={comment.id} 
+                        className={`p-3 rounded-lg text-sm flex gap-3
+                            ${isDark ? 'bg-slate-800' : 'bg-gray-100'}
+                            ${comment.isCompleted ? 'opacity-50' : ''}
+                        `}
+                    >
+                        {/* Checkbox / Confirmation Area */}
+                        <div className="flex-shrink-0 pt-0.5">
+                            {pendingCommentCompletion === comment.id ? (
+                                <div className="flex flex-col gap-1 items-center animate-in zoom-in duration-200">
+                                    <button 
+                                        onClick={confirmCommentCompletion}
+                                        className="p-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                                        title="Confirmar"
+                                    >
+                                        <Check size={14} />
+                                    </button>
+                                    <button 
+                                        onClick={() => setPendingCommentCompletion(null)}
+                                        className="p-1 bg-red-400 text-white rounded hover:bg-red-500 transition-colors"
+                                        title="Cancelar"
+                                    >
+                                        <XIcon size={14} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={() => !isLocked && initiateCommentToggle(comment.id)}
+                                    disabled={isLocked}
+                                    className={`transition-colors ${comment.isCompleted ? 'text-green-500' : 'text-gray-400 hover:text-gray-600'}`}
+                                >
+                                    {comment.isCompleted ? <CheckSquare size={20} /> : <Square size={20} />}
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Text Content */}
+                        <div className="flex-1 min-w-0">
+                            <p className={`whitespace-pre-wrap ${comment.isCompleted ? 'line-through text-gray-500' : ''}`}>
+                                {comment.text}
+                            </p>
+                            <div className="flex justify-between items-center mt-1">
+                                {pendingCommentCompletion === comment.id && (
+                                    <span className="text-xs text-orange-500 font-bold animate-pulse">Confirmar conclusão?</span>
+                                )}
+                                <p className="text-xs text-gray-500 ml-auto">
+                                    {new Date(comment.createdAt).toLocaleString('pt-BR')}
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 ))}
                 </div>

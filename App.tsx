@@ -100,7 +100,8 @@ const App: React.FC = () => {
             lastRecurringCompletion: value.lastRecurringCompletion ? new Date(value.lastRecurringCompletion) : null,
             comments: (value.comments || []).map((c: any) => ({
                 ...c,
-                createdAt: c.createdAt ? new Date(c.createdAt) : new Date()
+                createdAt: c.createdAt ? new Date(c.createdAt) : new Date(),
+                isCompleted: !!c.isCompleted
             })),
             elapsedTimeSeconds: value.elapsedTimeSeconds || 0,
             isPriority: !!value.isPriority,
@@ -218,7 +219,8 @@ const App: React.FC = () => {
             lastRecurringCompletion: updatedTask.lastRecurringCompletion ? updatedTask.lastRecurringCompletion.toISOString() : null,
             comments: updatedTask.comments.map(c => ({
                 ...c,
-                createdAt: c.createdAt.toISOString()
+                createdAt: c.createdAt.toISOString(),
+                isCompleted: !!c.isCompleted
             })),
             isSuspended: !!updatedTask.isSuspended,
             suspendedUntil: updatedTask.suspendedUntil ? updatedTask.suspendedUntil.toISOString() : null
