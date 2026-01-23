@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus } from '../types';
 import { getStatusColor, isDueSoon, isDueToday, getDaysOverdue, calculateCurrentTaskTime, formatTime, formatTimeShort, isPastDeadline } from '../utils';
-import { AlertCircle, Clock, CheckCircle2, XCircle, Calendar, Star, CalendarPlus } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle2, XCircle, Calendar, Star, CalendarPlus, MessageSquare } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -33,6 +33,11 @@ const TaskCard: React.FC<TaskCardProps> = ({
   // Precise check: If deadline is passed, it is overdue
   const isLate = task.deadline ? isPastDeadline(task.deadline) : false;
   const daysOverdue = task.deadline ? getDaysOverdue(task.deadline) : 0;
+  
+  // Get Last Comment
+  const lastComment = task.comments && task.comments.length > 0 
+    ? task.comments[task.comments.length - 1] 
+    : null;
   
   // Timer state for running tasks
   const [runningTime, setRunningTime] = useState<number | null>(null);
@@ -174,6 +179,14 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </button>
 
       </div>
+
+      {/* Last Comment Snippet */}
+      {lastComment && (
+        <div className="mt-3 flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400 opacity-90 overflow-hidden">
+            <MessageSquare size={12} className="mt-0.5 shrink-0" />
+            <span className="truncate italic">"{lastComment.text}"</span>
+        </div>
+      )}
       
       <div className="mt-3 flex items-center justify-between">
          <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(task.status, isDark, task.deadline)}`}>
