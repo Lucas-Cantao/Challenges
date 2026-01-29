@@ -191,6 +191,12 @@ const TaskModal: React.FC<TaskModalProps> = ({ task, isOpen, onClose, onUpdate, 
       isPriority: updatedPriority,
     };
 
+    // LOGIC CHANGE: If completing a task with NO deadline, set deadline to NOW.
+    // This moves it out of "No Deadline" list into the dated list.
+    if (newStatus === TaskStatus.COMPLETED && !task.deadline) {
+        updates.deadline = new Date();
+    }
+
     // Auto-stop timer
     if ((newStatus === TaskStatus.COMPLETED || newStatus === TaskStatus.CANCELLED) && task.timerStartedAt) {
        const currentTotal = calculateCurrentTaskTime(task);
