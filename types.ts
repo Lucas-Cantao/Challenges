@@ -28,6 +28,9 @@ export interface Task {
   elapsedTimeSeconds: number; // Stored accumulated time
   timerStartedAt?: Date | null; // Timestamp when the current session started (if running)
   
+  // Hierarchy
+  parentId?: string | null; // ID of the parent task
+
   // Recurring Logic
   isRecurring?: boolean; 
   recurringDays?: number[]; // 0 = Sunday, 1 = Monday, etc.

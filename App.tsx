@@ -108,7 +108,8 @@ const App: React.FC = () => {
             status: value.status || TaskStatus.TODO,
             title: value.title || 'Sem título',
             isSuspended: !!value.isSuspended,
-            suspendedUntil: value.suspendedUntil ? new Date(value.suspendedUntil) : null
+            suspendedUntil: value.suspendedUntil ? new Date(value.suspendedUntil) : null,
+            parentId: value.parentId || null
           } as Task;
         });
         setTasks(loadedTasks);
@@ -172,7 +173,8 @@ const App: React.FC = () => {
           recurringDays: newTaskData.recurringDays || [],
           recurringTime: newTaskData.recurringTime || "",
           isSuspended: !!newTaskData.isSuspended,
-          suspendedUntil: newTaskData.suspendedUntil ? newTaskData.suspendedUntil.toISOString() : null
+          suspendedUntil: newTaskData.suspendedUntil ? newTaskData.suspendedUntil.toISOString() : null,
+          parentId: newTaskData.parentId || null
         };
 
         await set(newTaskRef, taskToSave);
@@ -223,7 +225,8 @@ const App: React.FC = () => {
                 isCompleted: !!c.isCompleted
             })),
             isSuspended: !!updatedTask.isSuspended,
-            suspendedUntil: updatedTask.suspendedUntil ? updatedTask.suspendedUntil.toISOString() : null
+            suspendedUntil: updatedTask.suspendedUntil ? updatedTask.suspendedUntil.toISOString() : null,
+            parentId: updatedTask.parentId || null
         };
 
         await update(taskRef, dataToUpdate);
@@ -289,7 +292,9 @@ const App: React.FC = () => {
   const { start: weekStart, end: weekEnd } = useMemo(() => getWeekBounds(new Date()), []);
 
   const organizedTasks = useMemo(() => {
-    const nonPriorityTasks = tasks.filter(t => !t.isPriority);
+    // Only show ROOT tasks (parentId is null/undefined) in the main list
+    const rootTasks = tasks.filter(t => !t.parentId);
+    const nonPriorityTasks = rootTasks.filter(t => !t.isPriority);
     
     // Manual parsing
     let fStart: Date | null = null;
@@ -391,13 +396,15 @@ const App: React.FC = () => {
   }, [tasks, weekStart, weekEnd, filterStartDate, filterEndDate]);
 
   const priorityTasks = useMemo(() => {
+    // Only show Root tasks in priority column
     return tasks
-      .filter(t => t.isPriority && !isTaskSuspended(t)) // Filter suspended
+      .filter(t => t.isPriority && !isTaskSuspended(t) && !t.parentId) 
       .sort((a, b) => (a.priorityOrder || 0) - (b.priorityOrder || 0));
   }, [tasks]);
 
   const noDeadlineTasks = useMemo(() => {
-    return tasks.filter(t => !t.deadline && !t.isPriority && !t.isRecurring && !isTaskSuspended(t));
+    // Only show Root tasks in backlog
+    return tasks.filter(t => !t.deadline && !t.isPriority && !t.isRecurring && !isTaskSuspended(t) && !t.parentId);
   }, [tasks]);
 
   const toggleWeekExpand = (key: string) => {
@@ -405,6 +412,10 @@ const App: React.FC = () => {
     if (newSet.has(key)) newSet.delete(key);
     else newSet.add(key);
     setExpandedWeeks(newSet);
+  };
+
+  const getSubtaskCount = (taskId: string) => {
+      return tasks.filter(t => t.parentId === taskId).length;
   };
 
   const isDark = theme === 'dark';
@@ -584,6 +595,7 @@ const App: React.FC = () => {
                             task={task} 
                             onClick={handleTaskClick} 
                             onTogglePriority={handleTogglePriority}
+                            subtaskCount={getSubtaskCount(task.id)}
                             isDark={isDark} 
                             />
                         ))}
@@ -618,6 +630,7 @@ const App: React.FC = () => {
                             task={task} 
                             onClick={handleTaskClick} 
                             onTogglePriority={handleTogglePriority}
+                            subtaskCount={getSubtaskCount(task.id)}
                             isDark={isDark} 
                             />
                         ))}
@@ -651,6 +664,7 @@ const App: React.FC = () => {
                             task={task} 
                             onClick={handleTaskClick} 
                             onTogglePriority={handleTogglePriority}
+                            subtaskCount={getSubtaskCount(task.id)}
                             isDark={isDark} 
                             />
                         ))}
@@ -689,6 +703,7 @@ const App: React.FC = () => {
                         task={task} 
                         onClick={handleTaskClick} 
                         onTogglePriority={handleTogglePriority}
+                        subtaskCount={getSubtaskCount(task.id)}
                         isPriorityColumn={true}
                         isDark={isDark} 
                         draggable={true}
@@ -718,6 +733,7 @@ const App: React.FC = () => {
                         task={task} 
                         onClick={handleTaskClick} 
                         onTogglePriority={handleTogglePriority}
+                        subtaskCount={getSubtaskCount(task.id)}
                         isDark={isDark} 
                       />
                    ))}
@@ -745,7 +761,12 @@ const App: React.FC = () => {
         isOpen={isTaskModalOpen}
         onClose={() => setIsTaskModalOpen(false)}
         onUpdate={handleUpdateTask}
+        onCreateSubtask={handleCreateTask}
+        allTasks={tasks} // Pass full list for linking logic
+        onSelectTask={handleTaskClick} // For deep navigation
         isDark={isDark}
+        startDate={filterStartDate} // [NEW] Passing filter dates
+        endDate={filterEndDate}     // [NEW] Passing filter dates
       />
 
       <RecurringTasksModal

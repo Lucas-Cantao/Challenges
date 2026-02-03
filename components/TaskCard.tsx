@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Task, TaskStatus } from '../types';
 import { getStatusColor, isDueSoon, isDueToday, getDaysOverdue, calculateCurrentTaskTime, formatTime, formatTimeShort, isPastDeadline } from '../utils';
-import { AlertCircle, Clock, CheckCircle2, XCircle, Calendar, Star, CalendarPlus, MessageSquare } from 'lucide-react';
+import { AlertCircle, Clock, CheckCircle2, XCircle, Calendar, Star, CalendarPlus, MessageSquare, GitMerge } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
   onClick: (task: Task) => void;
   onTogglePriority?: (task: Task, e: React.MouseEvent) => void;
   isPriorityColumn?: boolean;
+  subtaskCount?: number;
   isDark: boolean;
   style?: React.CSSProperties;
   onDragStart?: (e: React.DragEvent) => void;
@@ -20,7 +21,8 @@ const TaskCard: React.FC<TaskCardProps> = ({
   task, 
   onClick, 
   onTogglePriority,
-  isPriorityColumn = false, 
+  isPriorityColumn = false,
+  subtaskCount = 0,
   isDark,
   style,
   onDragStart,
@@ -189,9 +191,19 @@ const TaskCard: React.FC<TaskCardProps> = ({
       )}
       
       <div className="mt-3 flex items-center justify-between">
-         <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(task.status, isDark, task.deadline)}`}>
-            <StatusIcon />
-            <span className={`${isPriorityColumn ? 'hidden lg:inline' : ''}`}>{getStatusText()}</span>
+         <div className="flex items-center gap-2">
+            <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getStatusColor(task.status, isDark, task.deadline)}`}>
+                <StatusIcon />
+                <span className={`${isPriorityColumn ? 'hidden lg:inline' : ''}`}>{getStatusText()}</span>
+            </div>
+            
+            {/* Subtask Indicator */}
+            {subtaskCount > 0 && (
+                <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 border ${isDark ? 'border-slate-700 text-slate-400' : 'border-gray-200 text-gray-500'}`}>
+                    <GitMerge size={12} className="rotate-90" />
+                    <span>{subtaskCount}</span>
+                </div>
+            )}
          </div>
 
          {/* Active Timer Indicator */}
