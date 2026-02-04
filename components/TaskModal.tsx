@@ -395,7 +395,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
           isPriority: false,
           status: TaskStatus.TODO,
           isRecurring: false,
-          elapsedTimeSeconds: 0,
+          // elapsedTimeSeconds: 0, // Removed to fix TypeScript Error
           parentId: task.id // Link immediately
       });
       setNewSubtaskTitle('');
