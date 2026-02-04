@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Task, TaskStatus, Comment } from '../types';
 import { formatDateFull, formatTime, getStatusColor, toInputDate, toInputTime, calculateCurrentTaskTime, getDayLabel } from '../utils';
-import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat, PauseCircle, CheckSquare, Square, GitMerge, Link as LinkIcon, Plus, Unlink } from 'lucide-react';
+import { X, Play, Pause, Send, Calendar, User, AlignLeft, Clock, Star, AlertTriangle, Check, X as XIcon, Pencil, Save, Repeat, PauseCircle, CheckSquare, Square, GitMerge, Link as LinkIcon, Plus, Unlink, ChevronRight } from 'lucide-react';
 
 interface TaskModalProps {
   task: Task | null;
@@ -129,6 +129,26 @@ const TaskModal: React.FC<TaskModalProps> = ({
             if (!a.isPriority && b.isPriority) return 1;
             return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         });
+  }, [task, allTasks]);
+
+  // -- Breadcrumbs (Ancestry) --
+  const breadcrumbs = useMemo(() => {
+      if (!task || !allTasks) return [];
+      const trail: Task[] = [];
+      let current = task;
+      let depth = 0;
+      // Traverse up to find parents (max depth 10 to avoid infinite loops in bad data)
+      while (current.parentId && depth < 10) {
+          const parent = allTasks.find(t => t.id === current.parentId);
+          if (parent) {
+              trail.unshift(parent); // Add to beginning
+              current = parent;
+              depth++;
+          } else {
+              break;
+          }
+      }
+      return trail;
   }, [task, allTasks]);
 
   // Filter possible tasks to link
@@ -466,67 +486,89 @@ const TaskModal: React.FC<TaskModalProps> = ({
       <div className={`w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] ${baseClasses}`}>
         
         {/* Header */}
-        <div className={`px-6 py-4 border-b flex justify-between items-center ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
-          <div className="flex items-center gap-3">
-             {!isEditing && (
-                 <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusColor(task.status, isDark, task.deadline)}`}>
-                    {task.status}
-                 </div>
-             )}
-             
-             <button 
-               onClick={togglePriority}
-               disabled={isLocked || !!pendingStatus || isEditing}
-               className={`flex items-center gap-1 text-xs font-bold border px-2 py-0.5 rounded-full transition-colors
-                 ${(isLocked || !!pendingStatus || isEditing) ? 'opacity-50 cursor-not-allowed' : ''}
-                 ${task.isPriority 
-                   ? 'text-amber-500 border-amber-500 bg-amber-50 dark:bg-amber-900/20' 
-                   : 'text-gray-400 border-gray-300 dark:border-slate-600 hover:border-amber-400 hover:text-amber-500'
-                 }`}
-             >
-                <Star size={12} fill={task.isPriority ? "currentColor" : "none"} />
-                {task.isPriority ? 'Prioridade' : 'Marcar Prioridade'}
-             </button>
-             
-             {/* Parent Indicator */}
-             {task.parentId && (
-                 <div className="flex items-center gap-1 text-xs text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-900">
-                     <GitMerge size={12} className="rotate-90" />
-                     <span>É Subtarefa</span>
-                 </div>
-             )}
-          </div>
-          <div className="flex items-center gap-2">
-             {!isEditing ? (
-                 <button 
-                    onClick={startEditing}
-                    disabled={isLocked}
-                    className={`p-2 rounded-full transition-colors ${isLocked ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400'}`}
-                    title="Editar Tarefa"
-                 >
-                    <Pencil size={18} />
-                 </button>
-             ) : (
-                 <div className="flex items-center gap-2 mr-2">
-                     <button 
-                        onClick={cancelEditing}
-                        className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
-                        title="Cancelar Edição"
-                     >
-                        <XIcon size={18} />
-                     </button>
-                     <button 
-                        onClick={saveEditing}
-                        className="p-2 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-600 dark:text-green-400 transition-colors"
-                        title="Salvar Alterações"
-                     >
-                        <Save size={18} />
-                     </button>
-                 </div>
-             )}
-             <button onClick={handleClose} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full transition-colors">
-                <X size={20} />
-             </button>
+        <div className={`px-6 py-4 border-b flex flex-col gap-3 ${isDark ? 'border-slate-700' : 'border-gray-100'}`}>
+          
+          {/* Breadcrumbs Trail */}
+          {breadcrumbs.length > 0 && (
+             <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 overflow-x-auto whitespace-nowrap pb-1 no-scrollbar">
+                {breadcrumbs.map((crumb) => (
+                    <React.Fragment key={crumb.id}>
+                        <button 
+                            onClick={() => onSelectTask && onSelectTask(crumb)}
+                            className="hover:text-blue-500 hover:underline transition-colors flex items-center gap-1"
+                        >
+                            <GitMerge size={10} className="rotate-90" />
+                            {crumb.title}
+                        </button>
+                        <ChevronRight size={10} className="opacity-50" />
+                    </React.Fragment>
+                ))}
+                <span className={`font-semibold ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Atual</span>
+             </div>
+          )}
+
+          <div className="flex justify-between items-center w-full">
+            <div className="flex items-center gap-3">
+              {!isEditing && (
+                  <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${getStatusColor(task.status, isDark, task.deadline)}`}>
+                      {task.status}
+                  </div>
+              )}
+              
+              <button 
+                onClick={togglePriority}
+                disabled={isLocked || !!pendingStatus || isEditing}
+                className={`flex items-center gap-1 text-xs font-bold border px-2 py-0.5 rounded-full transition-colors
+                  ${(isLocked || !!pendingStatus || isEditing) ? 'opacity-50 cursor-not-allowed' : ''}
+                  ${task.isPriority 
+                    ? 'text-amber-500 border-amber-500 bg-amber-50 dark:bg-amber-900/20' 
+                    : 'text-gray-400 border-gray-300 dark:border-slate-600 hover:border-amber-400 hover:text-amber-500'
+                  }`}
+              >
+                  <Star size={12} fill={task.isPriority ? "currentColor" : "none"} />
+                  {task.isPriority ? 'Prioridade' : 'Marcar Prioridade'}
+              </button>
+              
+              {/* Parent Indicator */}
+              {task.parentId && (
+                  <div className="flex items-center gap-1 text-xs text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-900">
+                      <GitMerge size={12} className="rotate-90" />
+                      <span>É Subtarefa</span>
+                  </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {!isEditing ? (
+                  <button 
+                      onClick={startEditing}
+                      disabled={isLocked}
+                      className={`p-2 rounded-full transition-colors ${isLocked ? 'opacity-30 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400'}`}
+                      title="Editar Tarefa"
+                  >
+                      <Pencil size={18} />
+                  </button>
+              ) : (
+                  <div className="flex items-center gap-2 mr-2">
+                      <button 
+                          onClick={cancelEditing}
+                          className="p-2 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                          title="Cancelar Edição"
+                      >
+                          <XIcon size={18} />
+                      </button>
+                      <button 
+                          onClick={saveEditing}
+                          className="p-2 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900/30 dark:hover:bg-green-900/50 text-green-600 dark:text-green-400 transition-colors"
+                          title="Salvar Alterações"
+                      >
+                          <Save size={18} />
+                      </button>
+                  </div>
+              )}
+              <button onClick={handleClose} className="p-2 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-full transition-colors">
+                  <X size={20} />
+              </button>
+            </div>
           </div>
         </div>
 
