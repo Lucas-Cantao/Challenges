@@ -35,6 +35,9 @@ const TaskModal: React.FC<TaskModalProps> = ({
   
   // State for inline confirmation
   const [pendingStatus, setPendingStatus] = useState<TaskStatus | null>(null);
+  
+  // State for validation errors (blocking actions)
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   // State for Comment Completion Confirmation (stores comment ID)
   const [pendingCommentCompletion, setPendingCommentCompletion] = useState<string | null>(null);
@@ -84,6 +87,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
      if (!isOpen) {
         setPendingStatus(null);
         setPendingCommentCompletion(null);
+        setValidationError(null);
         setNewComment('');
         setIsEditing(false);
         setNewSubtaskTitle('');
@@ -245,6 +249,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
   const handleClose = () => {
     setPendingStatus(null);
     setPendingCommentCompletion(null);
+    setValidationError(null);
     setIsEditing(false);
     onClose();
   };
@@ -252,6 +257,18 @@ const TaskModal: React.FC<TaskModalProps> = ({
   // 1. Initial Click: Set pending status if confirmation is needed
   const initiateStatusChange = (newStatus: TaskStatus) => {
     if (!task) return;
+
+    // BLOCKER: Check for incomplete subtasks before completing
+    if (newStatus === TaskStatus.COMPLETED) {
+        const incompleteSubtasks = subtasks.filter(t => 
+            t.status !== TaskStatus.COMPLETED && t.status !== TaskStatus.CANCELLED
+        );
+        
+        if (incompleteSubtasks.length > 0) {
+            setValidationError(`Conclua as ${incompleteSubtasks.length} subtarefa(s) pendente(s) antes de finalizar a tarefa.`);
+            return;
+        }
+    }
 
     // If changing TO Completed or Cancelled, require confirmation
     if (newStatus === TaskStatus.COMPLETED || newStatus === TaskStatus.CANCELLED) {
@@ -998,7 +1015,31 @@ const TaskModal: React.FC<TaskModalProps> = ({
 
         {/* Footer Actions */}
         <div className={`px-6 py-4 border-t ${isDark ? 'border-slate-700 bg-slate-900' : 'border-gray-100 bg-gray-50'}`}>
-           {pendingStatus ? (
+           {validationError ? (
+             <div className="flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
+                <div className="flex items-center gap-3">
+                   <div className="p-2 bg-red-100 text-red-600 rounded-full dark:bg-red-900/30 dark:text-red-400">
+                      <AlertTriangle size={20} />
+                   </div>
+                   <div>
+                      <p className={`font-bold text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                         Ação Bloqueada
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                         {validationError}
+                      </p>
+                   </div>
+                </div>
+                <button
+                     onClick={() => setValidationError(null)}
+                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors
+                        ${isDark ? 'border-slate-600 text-gray-300 hover:bg-slate-800' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}
+                     `}
+                   >
+                     Entendi
+                </button>
+             </div>
+           ) : pendingStatus ? (
              <div className="flex items-center justify-between animate-in slide-in-from-bottom-2 duration-300">
                 <div className="flex items-center gap-3">
                    <div className="p-2 bg-amber-100 text-amber-600 rounded-full dark:bg-amber-900/30 dark:text-amber-400">
