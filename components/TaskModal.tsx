@@ -604,8 +604,7 @@ const TaskModal: React.FC<TaskModalProps> = ({
           {/* Recurring Settings */}
           {(task.isRecurring || isEditing) && (
              <div className={`p-4 rounded-xl border transition-all ${isDark ? 'bg-indigo-900/20 border-indigo-500/30' : 'bg-indigo-50 border-indigo-100'}`}>
-                {/* ... (Existing Recurring Logic retained - removed for brevity, it's safe to assume it's here) ... */}
-                <div className="flex items-center justify-between mb-3">
+                 <div className="flex items-center justify-between mb-3">
                      <div className="flex items-center gap-2">
                         <Repeat size={16} className="text-indigo-500" />
                         <span className="font-semibold text-sm text-indigo-600 dark:text-indigo-400">Configuração de Recorrência</span>
@@ -634,11 +633,103 @@ const TaskModal: React.FC<TaskModalProps> = ({
                                 </div>
                             )}
                         </div>
+                        {/* Show suspension status if not editing */}
+                        {task.isSuspended && (
+                             <div className="flex items-center gap-2 mt-1 text-amber-600 dark:text-amber-400 text-xs font-medium bg-amber-100 dark:bg-amber-900/30 px-2 py-1 rounded w-fit">
+                                <PauseCircle size={14} />
+                                <span>Suspensa {task.suspendedUntil ? `até ${new Date(task.suspendedUntil).toLocaleDateString()}` : 'indefinidamente'}</span>
+                             </div>
+                        )}
                      </div>
                  )}
-                 {/* Simplified edit view for brevity, assuming original code structure holds */}
+
                  {(isEditing && editIsRecurring) && (
-                      <div className="text-xs text-gray-500 mt-2">Configurações de recorrência disponíveis no modo de edição.</div>
+                      <div className="space-y-4 mt-2 animate-in fade-in slide-in-from-top-1">
+                         {/* Days Selection */}
+                         <div>
+                            <p className="text-xs text-gray-500 mb-2 font-medium uppercase">Dias da semana</p>
+                            <div className="flex flex-wrap gap-1">
+                                {[0,1,2,3,4,5,6].map((day) => (
+                                <button
+                                    key={day}
+                                    type="button"
+                                    onClick={() => toggleRecurringDay(day)}
+                                    className={`w-8 h-8 rounded-full text-xs font-bold transition-all border
+                                    ${editRecurringDays.includes(day) 
+                                        ? 'bg-indigo-500 text-white border-indigo-600 shadow-md shadow-indigo-500/30' 
+                                        : 'bg-white text-gray-500 border-gray-200 dark:bg-slate-800 dark:border-slate-600 dark:text-gray-400 hover:border-indigo-300'}
+                                    `}
+                                >
+                                    {getDayLabel(day)}
+                                </button>
+                                ))}
+                            </div>
+                         </div>
+
+                         {/* Time Input */}
+                         <div>
+                             <label className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 uppercase">
+                                <Clock size={12} />
+                                Horário limite
+                             </label>
+                             <input
+                              type="time"
+                              value={editRecurringTime}
+                              onChange={(e) => setEditRecurringTime(e.target.value)}
+                              className={`w-32 px-2 py-1.5 text-sm rounded-lg border focus:ring-2 focus:ring-indigo-500 outline-none ${inputClasses} [color-scheme:${isDark ? 'dark' : 'light'}]`}
+                            />
+                         </div>
+
+                         {/* Suspension Controls */}
+                         <div className={`pt-3 mt-3 border-t ${isDark ? 'border-slate-700' : 'border-indigo-200'}`}>
+                             <div className="flex items-center justify-between mb-2">
+                                 <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                     <PauseCircle size={16} />
+                                     <span className="text-sm font-semibold">Suspender Recorrência</span>
+                                 </div>
+                                 <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={editIsSuspended} onChange={(e) => setEditIsSuspended(e.target.checked)} className="sr-only peer" />
+                                    <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-amber-500"></div>
+                                 </label>
+                             </div>
+                             
+                             {editIsSuspended && (
+                                 <div className="pl-6 space-y-2 animate-in fade-in">
+                                     <div className="flex items-center gap-4 text-sm">
+                                         <label className="flex items-center gap-2 cursor-pointer">
+                                             <input 
+                                                type="radio" 
+                                                name="suspensionType" 
+                                                checked={editSuspensionType === 'indefinite'} 
+                                                onChange={() => setEditSuspensionType('indefinite')}
+                                                className="text-amber-600 focus:ring-amber-500" 
+                                             />
+                                             <span>Indefinidamente</span>
+                                         </label>
+                                         <label className="flex items-center gap-2 cursor-pointer">
+                                             <input 
+                                                type="radio" 
+                                                name="suspensionType" 
+                                                checked={editSuspensionType === 'until'} 
+                                                onChange={() => setEditSuspensionType('until')}
+                                                className="text-amber-600 focus:ring-amber-500" 
+                                             />
+                                             <span>Até data específica</span>
+                                         </label>
+                                     </div>
+                                     
+                                     {editSuspensionType === 'until' && (
+                                         <input 
+                                            type="date" 
+                                            value={editSuspendedUntil}
+                                            onChange={(e) => setEditSuspendedUntil(e.target.value)}
+                                            className={`w-full px-2 py-1.5 text-sm rounded-lg border focus:ring-2 focus:ring-amber-500 outline-none ${inputClasses}`}
+                                         />
+                                     )}
+                                 </div>
+                             )}
+                         </div>
+                      </div>
                  )}
              </div>
           )}
